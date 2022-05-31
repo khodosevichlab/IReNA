@@ -257,7 +257,7 @@ filter_original_regulation <-function(potential_regulation,motif,
 #' @export
 #'
 #' @examples
-add_regulation_type <- function(Kmeans_result,potential_regulation,start_column=4){
+add_regulation_type <- function(Kmeans_result,potential_regulation,start_column=4, motif1){
   validInput(Kmeans_result,'Kmeans_result','df')
   validInput(potential_regulation,'potential_regulation','df')
   validInput(start_column,'start_column','numeric')
@@ -293,5 +293,14 @@ add_regulation_type <- function(Kmeans_result,potential_regulation,start_column=
   regulatory_relationships_Gen$Correlation <- cor2[correlationIndex,3]
   colnames(regulatory_relationships_Gen)[1:2] <- c('TF','TFSymbol')
   colnames(regulatory_relationships_Gen)[4:5] <- c('Target','TargetSymbol')
+  
+  ### check whether source genes are transcription factors
+  motifTF <- c()
+  for (i in 1:nrow(motif1)) {
+    TF <- strsplit(motif1[i,5],';')[[1]]
+    motifTF <- c(motifTF,TF)
+  }
+  
+  regulatory_relationships_Gen <- regulatory_relationships_Gen[regulatory_relationships_Gen[,1] %in% motifTF,]
   return(regulatory_relationships_Gen)
 }

@@ -1,46 +1,46 @@
+#' @import sccore magrittr dplyr
+#' @importFrom rlang is_empty
+#' @importFrom stringr str_ends
+#' @importFrom Biostrings readBStringSet
+#' @importFrom stats setNames
+#' @importFrom pbmcapply pbmcmapply
+NULL
+
 #' Get tss region sequence of target genes in regulaotry relationships
 #'
 #' @param gtf Gene transfer format, you can download it from http://www.ensembl.org/info/data/ftp/index.html
 #' @param gene.use character, indicating target genes
 #' @param upstream_length numeric, indicating upstream region length of TSS
 #' @param downstream_length numeric, indicating downstream region length of TSS
-#'
 #' @return data.frame, contains four columns are target gene, chr, start and end.
 #' @export
-#'
-get_tss_region <- function(gtf,gene.use,upstream_length=1000,downstream_length=500){
+get_tss_region <- function(gtf, gene.use, upstream_length=1000, downstream_length=500){
+  # Checks
   validInput(gtf,'gtf','df')
   validInput(gene.use,'gene.use','character')
   validInput(upstream_length,'upstream_length','numeric')
   validInput(downstream_length,'downstream_length','numeric')
-  gtfgene=gtf[gtf$V3=='gene',]
-  genes <- apply(gtfgene, 1, extract_genes)
-  gtfgene$genes <- genes
-  final <- gtfgene[gtfgene$genes%in%gene.use,]
-  chr1 <- gtfgene[gtfgene$genes%in%gene.use,]$V1
-  start1 <- c()
-  end1 <- c()
-  for (i in 1:nrow(final)) {
-    if (final[i,7]=='-') {
-      start1 <- c(start1,as.numeric(final[i,5])-upstream_length)
-      end1 <- c(end1,as.numeric(final[i,5])+downstream_length)
-    }else{
-      start1 <- c(start1,as.numeric(final[i,4])-upstream_length)
-      end1 <- c(end1,as.numeric(final[i,4])+downstream_length)
-    }
-  }
-  final$chr <- chr1
-  final$start <- start1
-  final$end <- end1
-  final <- final[,(ncol(final)-3):ncol(final)]
-  return(final)
-}
+  
+  # Preparations
+  df <- gtf %>% 
+    filter(V3=='gene') %>% 
+    mutate(genes = sapply(V9, strsplit, ";| ") %>% sapply("[", 2) %>% unname()) %>%
+    filter(genes %in% gene.use)
+      
+  # Calculate
+  res <- df %>%
+    apply(1, function(x) {
+      if(x[7] == "-") pos = x[5] else pos = x[4] 
+      pos %>% 
+        as.integer() %>% 
+        {c(as.integer(.-upstream_length),as.integer(.+downstream_length))}
+    }) %>% 
+    t() %>% 
+    data.frame() %>%
+    mutate(chr = df$V1, genes = df$genes) %>% 
+    rename(start = X1, end = X2)
 
-
-extract_genes <- function(gtf){
-  id1 <- strsplit(gtf[9],';')[[1]][1]
-  id2 <- strsplit(id1,' ')[[1]][2]
-  return(id2)
+  return(res)
 }
 
 
@@ -69,61 +69,83 @@ extract_genes <- function(gtf){
 #' @param select_motif logic, indicating whether to select motifs whose related
 #' transcription factors are in genes of gene_tss
 #' @param use_nohup logic, indicating whether use nohup to run all fimo scripts simultaneously
-#' @importFrom stringr str_ends
 #' @return
 #' @export
 #'
 #' @examples
-find_motifs_targetgenes <- function(gene_tss,motif,refdir,fimodir,outputdir1, Motifdir
-                                    , sequencedir = NULL,select_motif = T, use_nohup = F){
+find_motifs_targetgenes <- function(gene_tss, 
+                                    motif,
+                                    refdir, 
+                                    fimodir, 
+                                    outputdir, 
+                                    Motifdir, 
+                                    sequencedir = NULL, 
+                                    select_motif = TRUE, 
+                                    use_nohup = FALSE, 
+                                    verbose = TRUE,
+                                    n.cores = 1) {
+  # Checks
   validInput(refdir,'refdir','fileexists')
   validInput(Motifdir,'Motifdir','direxists')
-  validInput(outputdir1,'outputdir','direxists')
-  if (str_ends(outputdir1,'/')==FALSE) {
-    warning('the last character of outputdir1 is not "/"')
+  if (!dir.exists(outputdir)) {
+    if(verbose) message("Creating output dir")
+    dir.create(outputdir)
   }
-  fasta <- Biostrings::readBStringSet(refdir, format = "fasta", nrec = -1L,
+  if (str_ends(outputdir,'/')==FALSE) warning('the last character of outputdir1 is not "/"')
+  if(!is.logical(use_nohup)) stop('parameter use_nohup should be TRUE or FALSE')
+  outfasta <- paste0(outputdir,'fasta/')
+  outfimo <- paste0(outputdir,'fimo/')
+  if (!dir.exists(outfasta)) dir.create(outfasta)
+  if (!dir.exists(outfimo)) dir.create(outfimo)
+  if (is.null(sequencedir)) sequencedir <- outfasta
+  
+  # Preparations
+  if (select_motif==T) {
+    idx <- (motif1$EnsemblID %>% 
+             sapply(strsplit, split = ";", fixed = TRUE) %>% 
+             sapply(`[[`, 1)) %in% 
+      gene_tss$genes
+    
+    motif1 %<>% filter(idx)
+  } else {
+    motif1 = motif
+  }
+  if (verbose) cat("Reading fasta... ")
+  fasta <- readBStringSet(refdir, format = "fasta", nrec = -1L,
                                       skip = 0L, seek.first.rec = FALSE,
                                       use.names = TRUE)
-  gene_tss[,3] <- as.integer(gene_tss[,3])
-  gene_tss[,4] <- as.integer(gene_tss[,4])
-  if (select_motif==T) {
-    motif1 <- motifs_select(motif,gene_tss[,1])
-  }else{motif1 = motif}
+  
+  if (verbose) cat("done!\nCreating fasta files...\n")
+  pbmcmapply(\(gene, chr, start, end) {
+    dir.create(paste0(outfimo, gene))
+    
+    if (end > length(fasta[[chr]])) {
+      sequence <- fasta[[chr]][(start + 1):length(fasta[[chr]])]
+      name <- paste0(">",chr,":",start,"-",length(fasta[[chr]]))
+    } else {
+      sequence <- fasta[[chr]][(start + 1):end]
+      name <- paste0(">",chr,":",start,"-",end)
+    }
+    data.frame(name, sequence %>% 
+                 as.character() %>% 
+                 toupper()) %>% 
+      write.table(paste0(outfasta, gene,'.fa'), col.names = FALSE, row.names = FALSE, quote = FALSE)
+    
+    find_motifs(motif1, step=500, fimodir, paste0(outfimo, gene,'/'), Motifdir, paste0(sequencedir,gene,'.fa')) # Internal function, check outputdirs
+  }, gene = gene_tss$genes, chr = gene_tss$chr, start = gene_tss$start, end = gene_tss$end, mc.cores = n.cores)
+  
+  if (verbose) cat("Creating bash files... ")
+  if (file.exists(paste0(outfimo,gene_tss$genes[1],"/Fimo_All.sh"))) out.file <- "/Fimo_All.sh" else out.file <- "/Fimo1.sh"
 
-  outputdir <- paste0(outputdir1,'fimo/')
-  if (is.null(sequencedir)) {
-    sequencedir <- paste0(outputdir1,'fasta/')
-  }
-  fimoall <- c()
-  if (!'fasta' %in% dir(outputdir1)) {
-    dir.create(paste0(outputdir1,'fasta'))
-  }
-  if (!'fimo' %in% dir(outputdir1)) {
-    dir.create(paste0(outputdir1,'fimo'))
-  }
-  for (i in 1:nrow(gene_tss)) {
-    if (use_nohup==TRUE) {
-      fimo1 <- paste0('nohup sh ',outputdir1,'fimo/',gene_tss[i,1],'/','Fimo1.sh &')
-    }else if(use_nohup==FALSE){
-      fimo1 <- paste0('sh ',outputdir1,'fimo/',gene_tss[i,1],'/','Fimo1.sh ;')
-    }else{stop('parameter use_nohup should be TRUE or FALSE')}
-
-    fimoall <- c(fimoall,fimo1)
-    dir.create(paste0(outputdir1,'fimo/',gene_tss[i,1]))
-    fasta1 <- getfasta2(gene_tss[i,2:4],fasta)
-    write.table(fasta1,paste0(outputdir1,'fasta/',gene_tss[i,1],'.fa')
-                ,col.names=F,row.names=F,quote=F)
-    fimodir1 <- fimodir
-    outputdir12 <- paste0(outputdir1,'fimo/',gene_tss[i,1],'/')
-    outputdir11 <- paste0(outputdir,gene_tss[i,1],'/')
-    sequencedir1 <- paste0(sequencedir,gene_tss[i,1],'.fa')
-    find_motifs(motif1,step=500,fimodir1, outputdir12, outputdir11, Motifdir,
-                sequencedir1)
-  }
-  fimoall <- as.data.frame(fimoall)
-  write.table(fimoall,paste0(outputdir1,'fimo/','fimoall.sh'),
-              quote = F,row.names = F,col.names = F)
+    sapply(gene_tss$genes, \(gene) {
+    if (use_nohup) {
+      paste0('nohup sh ',outfimo,gene,out.file," &")
+    } else {
+      paste0('sh ',outfimo,gene,out.file," ;")
+    }
+  }) %>% 
+    write.table(paste0(outfimo,'fimoall.sh'), quote = FALSE, row.names = FALSE, col.names = FALSE)
+  if (verbose) cat("done!")
 }
 
 #' Generate regulation database accoding to the fimo result
@@ -134,44 +156,34 @@ find_motifs_targetgenes <- function(gene_tss,motif,refdir,fimodir,outputdir1, Mo
 #' 'motif = Tranfac201803_Hs_MotifTFsF', 'motif = Tranfac201803_Zf_MotifTFsF',
 #' 'motif = Tranfac201803_Ch_MotifTFsF' respectively, or you can upload your own
 #' motif data base, but the formata use be the same as our built-in motif database.
-#' @importFrom rlang is_empty
 #' @return
 #' @export
 #'
 #' @examples
-generate_fimo_regulation <- function(motif_dir,motif){
+generate_fimo_regulation <- function(motif_dir,motif, n.cores=1){
+  # Checks
   validInput(motif_dir,'motif_dir','direxists')
   validInput(motif,'motif','df')
-  targetgenes <- dir(motif_dir)
-  for (i in 1:length(targetgenes)) {
-    DirFile1 <- list.files(paste0(motif_dir,targetgenes[i]))
-    if (!rlang::is_empty(DirFile1)) {
-      info <- file.info(paste0(motif_dir,targetgenes[i],'/',DirFile1))
-      rownames(info) <- DirFile1
-      info <- info[info$size>0,]
-      info <- info[!grepl(c('Fimo_All.sh'),rownames(info)),]
-      info <- info[!grepl(c('Fimo..sh'),rownames(info)),]
-      info <- info[!grepl(c('Fimo...sh'),rownames(info)),]
+  
+  # Calculate
+  res_final <- plapply(dir(motif_dir), function(i) {
+    DirFile1 <- list.files(paste0(motif_dir,i))
+    if (!is_empty(DirFile1)) {
+      info <- file.info(paste0(motif_dir,i,'/',DirFile1)) %>% 
+        `rownames<-`(DirFile1)
+        filter(., size > 0, !grepl(c('Fimo_All.sh|Fimo..sh|Fimo...sh'),rownames(.))) %>%
       if (nrow(info)>0) {
-        motif1 <- rownames(info)
-        motif1 <- gsub('.txt','',motif1)
-        motif2 <- motif[motif$Accession %in% motif1,]
-        motifgene <- apply(motif2, 1, split_motif)
-        motifgene <- unlist(motifgene)
-        motifgene1 <- paste(motifgene,collapse = ';')
-        if (exists('regulation_final') == FALSE) {
-          regulation_final <- data.frame(motifgene1,targetgenes[i])
-          colnames(regulation_final) <- c('TF','Target')
-        }else{
-          regulation1 <- data.frame(motifgene1,targetgenes[i])
-          rownames(regulation1) <- i
-          colnames(regulation1) <- c('TF','Target')
-          regulation_final <- rbind(regulation_final,regulation1)
-        }
+        res <- motif %>% 
+          filter(Accession %in% (rownames(info) %>% gsub('.txt','', .))) %>%
+          apply(1, function(x) strsplit(x[5], ';') %>% sapply("[", 1)) %>% 
+          unlist() %>% 
+          paste(collapse = ";") %>% 
+          data.frame(i)
       }
+      return(res)
     }
-  }
-  return(regulation_final)
+  }, progress = T, n.cores = n.cores)
+  return(res_final)
 }
 
 #' Filter regulatory relationships according to binding motifs generated by fimo
@@ -204,8 +216,3 @@ filter_regulation_fimo <- function(fimo_regulation,regulatory_relationships){
   regulation1 <- regulatory_relationships[regulation_pair %in% fimo_pair,]
   return(regulation1)
 }
-
-split_motif <- function(motif){
-  gene1 <- strsplit(motif[5],';')[[1]]
-}
-

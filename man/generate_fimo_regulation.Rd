@@ -4,7 +4,7 @@
 \alias{generate_fimo_regulation}
 \title{Generate regulation database accoding to the fimo result}
 \usage{
-generate_fimo_regulation(motif_dir, motif)
+generate_fimo_regulation(motif_dir, motif, n.cores = 1)
 }
 \arguments{
 \item{motif_dir}{character, indicating the path of fimo result}

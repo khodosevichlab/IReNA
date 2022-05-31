@@ -4,15 +4,7 @@
 \alias{find_motifs}
 \title{Find motifs}
 \usage{
-find_motifs(
-  motif,
-  step = 20,
-  fimodir,
-  outputdir1,
-  outputdir,
-  Motifdir,
-  sequencedir
-)
+find_motifs(motif, step = 20, fimodir, outputdir, Motifdir, sequencedir)
 }
 \arguments{
 \item{motif}{motif file, you can choose our bulit-in motif database of
@@ -28,13 +20,13 @@ into groups and then calculated each group using FIMO at the same time by nohup}
 \item{fimodir}{character, indicating path of fimo software,
 if you have added fimo to the environment variable, just set this argument as 'fimo'}
 
-\item{outputdir1}{character, indicating the output path of shell script}
-
 \item{outputdir}{character, indicating output path of fimo result}
 
 \item{Motifdir}{character, indicating the path of meme motif file}
 
 \item{sequencedir}{sequence file directory}
+
+\item{outputdir1}{character, indicating the output path of shell script}
 }
 \value{
 return scripts to run Fimo in command line

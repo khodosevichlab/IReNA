@@ -1,3 +1,7 @@
+#' @import magrittr dplyr
+#' @importFrom sccore plapply
+NULL
+
 #' merge footprints and return corresponding sequence-
 #' @description This function first merges footprints whose distances is less
 #' than 4, and then obtains the sequence of each footprint based on the reference genome,
@@ -75,26 +79,6 @@ getfasta <- function(merged_footprints, fastadir) {
   fasta <- Biostrings::readBStringSet(fastadir, format = "fasta", nrec = -1L,
                                       skip = 0L, seek.first.rec = FALSE,
                                       use.names = TRUE)
-  fasta1 <- c()
-  for (i in 1:nrow(merged_footprints)) {
-    name <- paste0(">", merged_footprints[i, 1], ":", merged_footprints[i, 2],
-                   "-", merged_footprints[i, 3])
-    if (merged_footprints[i, 3] > length(fasta[[merged_footprints[i, 1]]])) {
-      sequence <- toupper(as.character(fasta[[merged_footprints[i, 1]]][
-        (merged_footprints[i, 2] + 1):length(fasta[[merged_footprints[i, 1]]])]))
-      name <- paste0(">", merged_footprints[i, 1], ":", merged_footprints[i, 2],
-                     "-", length(fasta[[merged_footprints[i, 1]]]))
-    } else{
-      sequence <- toupper(as.character(fasta[[merged_footprints[i, 1]]][
-        (merged_footprints[i, 2] + 1):merged_footprints[i, 3]]))
-    }
-    fasta1 <- c(fasta1, name, sequence)
-  }
-  fasta1 <- as.data.frame(fasta1)
-  return(fasta1)
-}
-
-getfasta2 <- function(merged_footprints, fasta) {
   fasta1 <- c()
   for (i in 1:nrow(merged_footprints)) {
     name <- paste0(">", merged_footprints[i, 1], ":", merged_footprints[i, 2],

@@ -9,11 +9,13 @@ find_motifs_targetgenes(
   motif,
   refdir,
   fimodir,
-  outputdir1,
+  outputdir,
   Motifdir,
   sequencedir = NULL,
-  select_motif = T,
-  use_nohup = F
+  select_motif = TRUE,
+  use_nohup = FALSE,
+  verbose = TRUE,
+  n.cores = 1
 )
 }
 \arguments{
@@ -33,12 +35,6 @@ genome can be download from https://hgdownload.soe.ucsc.edu/downloads.html}
 \item{fimodir}{character, indicating path of fimo software,
 if you have added fimo to the environment variable, just set this argument as 'fimo'}
 
-\item{outputdir1}{character, indicating the output path of the shell scripts
-and sequence of target genes tss regions.(function 'find_motifs_targetgenes'
-will automatically generate two folders ('fasta' and 'fimo') in the path
-'outputdir1', and store sequence of target genes tss regions in the 'fasta'
-and shell scripts in the 'fimo')}
-
 \item{Motifdir}{character, indicating the path of meme motif file}
 
 \item{sequencedir}{character, indicating the path of sequence of target genes
@@ -48,6 +44,12 @@ tss regions. If it's NULL, this parameter will be paste0(outputdir1,'fasta/')}
 transcription factors are in genes of gene_tss}
 
 \item{use_nohup}{logic, indicating whether use nohup to run all fimo scripts simultaneously}
+
+\item{outputdir1}{character, indicating the output path of the shell scripts
+and sequence of target genes tss regions.(function 'find_motifs_targetgenes'
+will automatically generate two folders ('fasta' and 'fimo') in the path
+'outputdir1', and store sequence of target genes tss regions in the 'fasta'
+and shell scripts in the 'fimo')}
 }
 \value{
 

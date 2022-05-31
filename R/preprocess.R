@@ -1,45 +1,7 @@
 
-#' Select the motif related to the input genes
-#' @description Select the motif related to the input genes. Genes used here
-#' should be ENSEMBEL ID.
-#' @param motif motif file, you can choose our bulit-in motif database of
-#' 'mus musculus', 'homo sapiens', 'zebrafish' and 'chicken' by
-#' 'motif = Tranfac201803_Mm_MotifTFsF', 'motif = Tranfac201803_Hs_MotifTFsF',
-#' 'motif = Tranfac201803_Zf_MotifTFsF', 'motif = Tranfac201803_Ch_MotifTFsF'
-#' respectively, or you can upload your own motif data base, but the formata
-#' use be the same as our built-in motif database.
-#' @param gene character, indicating genes used to filter motif. You can use
-#' differentially expressed genes of corresponding scRNA-seq or bulk RNA-seq data,
-#' or just use expressed genes.
-#'
-#' @return return filtered motif
-#' @export
-#'
-#' @examples load(system.file("extdata", "test_clustering.rda", package = "IReNA"))
-#' motif <- Tranfac201803_Hs_MotifTFsF
-#' Kmeans_clustering_ENS <- add_ENSID(test_clustering, Spec1='Hs')
-#' gene <- rownames(Kmeans_clustering_ENS)
-#' filtered_motif <- motifs_select(motif,gene)
-motifs_select <- function(motif,gene){
-  validInput(motif,'motif','df')
-  validInput(gene,'gene','character')
-  index <- c()
-  for (i in 1:nrow(motif)) {
-    judge <- c()
-    gene1 <- strsplit(motif[i,5],';')[[1]]
-    for (j in gene1) {
-      if (j %in% gene) {
-        judge <- c(judge,'YSE')
-      }
-    }
-    if ('YSE' %in% judge) {
-      index <- c(index,i)
-    }
-  }
-  motif1 <- motif[index,]
-  return(motif1)
-}
-
+#' @import dplyr magrittr
+#' @importFrom sccore plapply
+NULL
 
 #' Merge and sort counts
 #' @description Sort the peak files by end of peak, start of peak, and chr of peak
